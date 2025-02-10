@@ -5,12 +5,12 @@ function minkow_intersection(R::Hyperrectangle{N}, E::Ellipsoid{N}) where {N}
     E_c = E.center
     K = E_c - R_c
 
-    M = (VE.shape_matrix)
+    M = (E.shape_matrix)
     L = zeros(2)
     for i in 1:2
         axis = zeros(2)
         axis[i] = 1.0
-        L[i] = sqrt(dot(axis, inv(M) * axis))
+        L[i] = sqrt(dot(axis', inv(M) * axis))
     end
     
     xi = K
