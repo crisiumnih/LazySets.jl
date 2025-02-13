@@ -106,6 +106,9 @@ itself uses `CDDLib` for variable elimination. The available algorithms are:
 """
 function minkowski_sum(P::AbstractPolyhedron, Q::AbstractPolyhedron;
                        backend=nothing, algorithm=nothing, prune=true)
+    @assert dim(P) == dim(Q) "expected that the sets have the same dimension, " *
+                             "but they are $(dim(P)) and $(dim(Q)) respectively"
+
     return _minkowski_sum_hrep_preprocess(P, Q, backend, algorithm, prune)
 end
 
@@ -314,14 +317,8 @@ its generators are the concatenation of the generators of `PZ` and `Z`.
     return DensePolynomialZonotope(c, PZ.E, PZ.F, G)
 end
 
-# ZeroSet is the neutral element (+ disambiguation)
-for T in [:LazySet, :AbstractPolyhedron, :AbstractPolytope, :AbstractZonotope,
-          :AbstractHyperrectangle, :AbstractSingleton, :DensePolynomialZonotope,
-          :SparsePolynomialZonotope]
-    @eval begin
-        @commutative minkowski_sum(::ZeroSet, X::$T) = X
-    end
-end
+# ZeroSet is the neutral element
+@commutative minkowski_sum(::ZeroSet, X::LazySet) = X
 
 # See [Kochdumper21a; Proposition 3.1.19](@citet).
 @commutative function minkowski_sum(PZ::SparsePolynomialZonotope, Z::AbstractZonotope)
@@ -369,11 +366,30 @@ end
     return _minkowski_sum_emptyset(∅, X)
 end
 
-# disambiguation
-for T in [:ZeroSet]
-    @eval begin
-        @commutative function minkowski_sum(∅::EmptySet, X::$T)
-            return _minkowski_sum_emptyset(∅, X)
-        end
+@commutative function minkowski_sum(U::Universe, X::LazySet)
+    return _minkowski_sum_universe(U, X)
+end
+
+# ============== #
+# disambiguation #
+# ============== #
+
+for T in (:AbstractPolyhedron, :AbstractPolytope, :AbstractZonotope,
+          :AbstractHyperrectangle, :AbstractSingleton, :DensePolynomialZonotope,
+          :SparsePolynomialZonotope)
+    @eval @commutative function minkowski_sum(::ZeroSet, X::$T)
+        return X
+    end
+end
+
+for T in (:AbstractPolyhedron, :ZeroSet)
+    @eval @commutative function minkowski_sum(U::Universe, X::$T)
+        return _minkowski_sum_universe(U, X)
+    end
+end
+
+for T in (:ZeroSet, :Universe)
+    @eval @commutative function minkowski_sum(∅::EmptySet, X::$T)
+        return _minkowski_sum_emptyset(∅, X)
     end
 end
