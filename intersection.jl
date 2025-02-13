@@ -6,9 +6,9 @@ function minkow_intersection(R::Hyperrectangle{N}, E::Ellipsoid{N}) where {N}
     K = E_c - R_c
 
     M = (E.shape_matrix)
-    L = zeros(2)
+    L = zeros(N, 2)
     for i in 1:2
-        axis = zeros(2)
+        axis = zeros(N, 2)
         axis[i] = 1.0
         L[i] = sqrt(dot(axis', inv(M) * axis))
     end
