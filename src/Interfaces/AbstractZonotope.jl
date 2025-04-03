@@ -809,6 +809,18 @@ Zonotope order-reduction method from [AlthoffSB10](@citet).
 struct ASB10 <: AbstractReductionMethod end
 
 """
+    JSK16 <: AbstractReductionMethod
+
+Zonotope order-reduction method from [yet to add](@citet).
+"""
+struct JSK16 <: AbstractReductionMethod 
+
+    ε::Float64
+    δ::Float64
+
+end
+
+"""
     reduce_order(Z::AbstractZonotope, r::Real,
                  [method]::AbstractReductionMethod=GIR05())
 
@@ -876,6 +888,125 @@ function reduce_order(Z::AbstractZonotope, r::Real,
     Gred = _hcat_KLred(G, view(indices, 1:m), Lred)
 
     return Zonotope(c, Gred)
+end
+
+"""
+"""
+function reduce_order(Z::AbstractZonotope, r::Real, method::JSK16)
+    r >= 1 || throw(ArgumentError("the target order should be at least 1, " *
+                                  "but it is $r"))
+    n = dim(Z)
+    p = ngens(Z)
+
+    # if r is bigger than the order of Z => do not reduce
+    (r * n >= p) && return Z
+
+    c = center(Z)
+    G = genmat(Z)
+
+    if isone(r)
+        # if r = 1 => m = 0 and the generators need not be sorted
+        Lred = _approximate_reduce_order(c, G, 1:p, method)
+        return Zonotope(c, Lred)
+    end
+
+    G, G✶ = _factorG(G, method.ε, method.δ)
+
+end
+
+function _factorG(G::AbstractMatrix, ϵ::Float64, δ::Float64)
+    G✶ = copy(G)
+    n, ng = size(G)
+
+    # rref with column swap
+    for k in 1:n
+        # normalize rows k:n
+        for i in k:n
+            row_norm = norm(G✶[i, :], 1)
+            if row_norm > ϵ
+                G✶[i, :] ./= row_norm
+            end
+        end
+
+        submatrix = G✶[k:n, k:ng]
+        max_val, idx = findmax(abs.(submatrix))
+        i_max = k + idx[1] - 1
+        j_max = k + idx[2] - 1
+
+        if abs(max_val) ≤ ϵ
+            break
+        end
+
+        # swap rows and columns
+        if i_max != k
+            G✶[[k, i_max], :] = G✶[[i_max, k], :]
+        end
+
+        if j_max != k
+            G[:, [k, j_max]] = G[:, [j_max, k]]
+            G✶[:, [k, j_max]] = G✶[:, [j_max, k]]
+        end
+
+        G✶ = _rref(G✶)
+    end
+
+    #  extra column swaps until all |g∗ij| ≤ 1 + δ
+    while true
+        (max_val, max_idx) = findmax(abs.(G✶))
+        (max_val ≤ 1 + δ) && break
+        k, j = Tuple(max_idx)
+
+        G[:,[k,j]] = G[:,[j,k]]
+        G✶[:,[k,j]] = G✶[:,[j,k]]
+
+        pivot = G✶[k,k]
+        for i in 1:n
+            i == k && continue
+            factor = G✶[i,k] / pivot
+            G✶[i,:] -= factor .* G✶[k,:]
+        end
+        G✶[k,:] ./= pivot
+    end
+
+    return G, G✶
+end
+
+# reduced row echelon (rref)
+function _rref(G::AbstractMatrix{N}) where {N}
+    A = copy(G)
+    nr, nc = size(A)
+    pivot = 1
+
+    for r in 1:nr
+        if pivot > nc
+            return A
+        end
+
+        i = r
+        while i ≤ nr && A[i, pivot] == 0
+            i += 1
+            if i > nr
+                i = r
+                pivot += 1
+                pivot > nc && return A
+            end
+        end
+
+        A[[i, r], :] = A[[r, i], :]
+
+        if A[r, pivot] != 0
+            A[r, :] ./= A[r, pivot]
+        end
+
+        for i in 1:nr
+            i == r && continue
+            A[i, :] -= A[i, pivot] * A[r, :]
+        end
+
+        pivot += 1
+    end
+
+    return A
 end
 
 # approximate with a box
