@@ -66,7 +66,7 @@ If we only consider *concrete* subtypes, then:
 julia> concrete_subtypes = subtypes(LazySet, true);
 
 julia> length(concrete_subtypes)
-53
+54
 
 julia> println.(concrete_subtypes);
 AffineMap
@@ -122,7 +122,7 @@ VPolygon
 VPolytope
 ZeroSet
 Zonotope
-
+ZonotopeMD
 ```
 """
 abstract type LazySet{N} end
@@ -1538,7 +1538,7 @@ function _isempty_polyhedron_polyhedra(P::LazySet{N}, witness::Bool=false;
     end
 
     if result
-        return witness ? (true, N[]) : true
+        return _witness_result_empty(witness, true, N)
     elseif witness
         error("witness production is not supported yet")
     else

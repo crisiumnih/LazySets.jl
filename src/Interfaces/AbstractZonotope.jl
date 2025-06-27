@@ -42,11 +42,12 @@ The subtypes of `AbstractZonotope` (including abstract interfaces):
 
 ```jldoctest; setup = :(using LazySets: subtypes)
 julia> subtypes(AbstractZonotope)
-4-element Vector{Any}:
+5-element Vector{Any}:
  AbstractHyperrectangle
  HParallelotope
  LineSegment
  Zonotope
+ ZonotopeMD
 ```
 """
 abstract type AbstractZonotope{N} <: AbstractCentrallySymmetricPolytope{N} end
@@ -809,6 +810,28 @@ Zonotope order-reduction method from [AlthoffSB10](@citet).
 struct ASB10 <: AbstractReductionMethod end
 
 """
+    SRMB16 <: AbstractReductionMethod
+
+Zonotope order-reduction method from [ScottRMB16](@citet).
+
+### Fields
+
+- `ϵ` -- (optional; default: `1e-6`) pivot threshold
+- `δ` -- (optional; default: `1e-3`) volume threshold
+
+### Notes
+
+The method reorders the generator matrix using reduced row echelon form (rref) to the form
+``[T ~ V]``, then iteratively removes one generator from ``V`` while updating ``T``.
+"""
+struct SRMB16{N<:Number} <: AbstractReductionMethod
+    ϵ::N
+    δ::N
+
+    SRMB16(ϵ::N=1e-6, δ::N=1e-3) where {N<:Number} = new{N}(ϵ, δ)
+end
+
+"""
     reduce_order(Z::AbstractZonotope, r::Real,
                  [method]::AbstractReductionMethod=GIR05())
 
@@ -831,17 +854,19 @@ The available algorithms are:
 
 ```jldoctest; setup = :(using LazySets: subtypes, AbstractReductionMethod)
 julia> subtypes(AbstractReductionMethod)
-3-element Vector{Any}:
+4-element Vector{Any}:
  LazySets.ASB10
  LazySets.COMB03
  LazySets.GIR05
+ LazySets.SRMB16
 ```
 
-See the documentation of each algorithm for references. These methods split the
+See the documentation of each algorithm for references. Most methods split the
 given zonotopic set `Z` into two zonotopes, `K` and `L`, where `K` contains the
 most "representative" generators and `L` contains the generators that are
-reduced, `Lred`, using a box overapproximation. We follow the notation from
-[YangS18](@citet). See also [KopetzkiSA17](@citet).
+reduced, `Lred`, using a box overapproximation. This methodology varies slightly
+for [`SRMB16`](@ref). We follow the notation from [YangS18](@citet). See also
+[KopetzkiSA17](@citet).
 """
 function reduce_order(Z::AbstractZonotope, r::Real,
                       method::AbstractReductionMethod=GIR05())
@@ -852,7 +877,10 @@ function reduce_order(Z::AbstractZonotope, r::Real,
 
     # if r is bigger than the order of Z => do not reduce
     (r * n >= p) && return Z
+    return _reduce_order_zonotope_common(Z, r, n, p, method)
+end
 
+function _reduce_order_zonotope_common(Z, r, n, p, method::Union{ASB10,COMB03,GIR05})
     c = center(Z)
     G = genmat(Z)
 
@@ -876,6 +904,139 @@ function reduce_order(Z::AbstractZonotope, r::Real,
     Gred = _hcat_KLred(G, view(indices, 1:m), Lred)
 
     return Zonotope(c, Gred)
+end
+
+function _reduce_order_zonotope_common(Z, r, n, p, method::SRMB16)
+    c = center(Z)
+    G = genmat(Z)
+
+    # reorder columns: G ↦ [T V] and also obtain IR = [I R] where R = T⁻¹V
+    # TODO if G is rank deficient, fall back to COMB03
+    TV, IR = _factorG(G, method.ϵ, method.δ)
+    T = TV[:, 1:n]
+    V = TV[:, (n + 1):end]
+    R = IR[:, (n + 1):end]
+
+    # iteratively remove one generator v by overapproximating with a parallelotope;
+    m = floor(Int, n * r)
+    while p > m
+        # choose v that minimizes the volume error of this approximation
+        j_min = argmin([prod(1 .+ abs.(R[:, j])) - sum(abs, R[:, j]) for j in axes(R, 2)])
+
+        # slice out column j_min
+        V = V[:, [1:(j_min - 1); (j_min + 1):end]]
+        R₋ = R[:, [1:(j_min - 1); (j_min + 1):end]]
+
+        diag_matrix = Diagonal(1 .+ abs.(R[:, j_min]))
+        T = T * diag_matrix
+        if !isempty(R)
+            R = inv(diag_matrix) * R₋
+        end
+
+        p -= 1
+    end
+
+    G_red = hcat(T, V)
+    return Zonotope(c, G_red)
+end
+
+# reorder columns of G as [T V] such that T is invertible; also return IR of the
+# same shape and such that IR = [I R] where R = T⁻¹V
+function _factorG(G::AbstractMatrix, ϵ::N, δ::N) where {N}
+    TV = copy(G)
+    IR = copy(G)
+    n, ng = size(G)
+
+    # rref with column swap
+    for k in 1:n
+        # normalize rows k:n
+        for i in k:n
+            row_norm = norm(IR[i, :], 1)
+            if row_norm > ϵ
+                IR[i, :] ./= row_norm
+            end
+        end
+
+        submatrix = IR[k:n, k:ng]
+        max_val, idx = findmax(abs.(submatrix))
+        i_max = k + idx[1] - 1
+        j_max = k + idx[2] - 1
+
+        if abs(max_val) ≤ ϵ
+            break
+        end
+
+        # swap rows and columns
+        if i_max != k
+            IR[[k, i_max], :] = IR[[i_max, k], :]
+        end
+
+        if j_max != k
+            TV[:, [k, j_max]] = TV[:, [j_max, k]]
+            IR[:, [k, j_max]] = IR[:, [j_max, k]]
+        end
+
+        _rref!(IR)
+    end
+
+    #  extra column swaps until all |IR_ij| ≤ 1 + δ
+    while true
+        (max_val, max_idx) = findmax(abs.(IR))
+        (max_val ≤ 1 + δ) && break
+        k, j = Tuple(max_idx)
+
+        TV[:, [k, j]] = TV[:, [j, k]]
+        IR[:, [k, j]] = IR[:, [j, k]]
+
+        pivot = IR[k, k]
+        for i in 1:n
+            i == k && continue
+            factor = IR[i, k] / pivot
+            IR[i, :] -= factor .* IR[k, :]
+        end
+        IR[k, :] ./= pivot
+    end
+
+    return TV, IR
+end
+
+# reduced row echelon form
+function _rref!(A::AbstractMatrix)
+    nr, nc = size(A)
+    pivot = 1
+
+    for r in 1:nr
+        if pivot > nc
+            return A
+        end
+
+        i = r
+        while i ≤ nr && A[i, pivot] == 0
+            i += 1
+            if i > nr
+                i = r
+                pivot += 1
+                if pivot > nc
+                    return A
+                end
+            end
+        end
+
+        A[[i, r], :] = A[[r, i], :]
+
+        if A[r, pivot] != 0
+            A[r, :] ./= A[r, pivot]
+        end
+
+        for i in 1:nr
+            i == r && continue
+            A[i, :] -= A[i, pivot] * A[r, :]
+        end
+
+        pivot += 1
+    end
+
+    return A
 end
 
 # approximate with a box

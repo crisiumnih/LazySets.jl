@@ -2,6 +2,10 @@ for N in [Float64, Float32]
     # random ball
     rand(Ball2)
 
+    # invalid inputs
+    @test_throws AssertionError Ball2(N[0], N(-1))
+    @test_throws AssertionError Ball2(N[0], N(NaN))
+
     # 1D Ball2
     b = Ball2(N[0], N(1))
     # Test Dimension
@@ -72,6 +76,9 @@ for N in [Float64, Float32]
 
     # boundedness
     @test isbounded(b) && isboundedtype(typeof(b))
+
+    # isoperationtype
+    @test !isoperationtype(typeof(b))
 
     # ispolyhedral
     @test !ispolyhedral(b)

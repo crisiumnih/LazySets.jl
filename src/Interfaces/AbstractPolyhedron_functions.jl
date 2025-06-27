@@ -1,7 +1,6 @@
 export constrained_dimensions,
        remove_redundant_constraints,
        remove_redundant_constraints!,
-       isfeasible,
        addconstraint!,
        ishyperplanar
 
@@ -43,8 +42,7 @@ constraint of `P`.
 function isuniversal(P::AbstractPolyhedron, witness::Bool=false)
     c = constraints(P)
     if isempty(c)
-        N = eltype(P)
-        return witness ? (true, N[]) : true
+        return _witness_result_empty(witness, true, eltype(P))
     else
         return witness ? isuniversal(first(c), true) : false
     end
@@ -462,16 +460,14 @@ function _affine_map_inverse_hrep(A::AbstractMatrix, P::LazySet,
                                   b::Union{AbstractVector,Nothing}=nothing)
     C_leq_d = constraints_list(P)
     constraints_res = _preallocate_constraints(C_leq_d)
-    has_undefs = false
-    @inbounds for (i, c_leq_di) in enumerate(C_leq_d)
+    i = 1
+    @inbounds for c_leq_di in C_leq_d
         cinv = vec(At_mul_B(c_leq_di.a, A))
         rhs = isnothing(b) ? c_leq_di.b : c_leq_di.b - first(At_mul_B(c_leq_di.a, b))
         if iszero(cinv)
+            # constraint is redundant or infeasible
             N = eltype(cinv)
-            if zero(N) <= rhs
-                # constraint is redundant
-                has_undefs = true
-            else
+            if rhs < zero(N)
                 # constraint is infeasible
                 # return constraints representing empty set
                 a1 = zeros(N, length(cinv))
@@ -482,12 +478,11 @@ function _affine_map_inverse_hrep(A::AbstractMatrix, P::LazySet,
             end
         else
             constraints_res[i] = HalfSpace(cinv, rhs)
+            i += 1
         end
     end
-    if has_undefs  # there were redundant constraints, so remove them
-        constraints_res = [constraints_res[i]
-                           for i in eachindex(constraints_res)
-                           if isassigned(constraints_res, i)]
+    if i <= length(constraints_res)  # there were redundant constraints, so shorten vector
+        resize!(constraints_res, i - 1)
     end
     return constraints_res
 end
@@ -944,49 +939,6 @@ function _project_polyhedron(P::LazySet, block; kwargs...)
     M = projection_matrix(block, dim(P), N)
     πP = linear_map(M, P; kwargs...)
     return constraints_list(πP)
-end
-
-"""
-    isfeasible(A::AbstractMatrix, b::AbstractVector, [witness]::Bool=false;
-               [solver]=nothing)
-
-Check for feasibility of linear constraints given in matrix-vector form.
-
-### Input
-
-- `A`       -- constraints matrix
-- `b`       -- constraints vector
-- `witness` -- (optional; default: `false`) flag for witness production
-- `solver`  -- (optional; default: `nothing`) LP solver
-
-### Output
-
-If `witness` is `false`, the result is a `Bool`.
-
-If `witness` is `true`, the result is a pair `(res, w)` where `res` is a `Bool`
-and `w` is a witness point/vector.
-
-### Algorithm
-
-This implementation solves the corresponding feasibility linear program.
-"""
-function isfeasible(A::AbstractMatrix, b::AbstractVector, witness::Bool=false;
-                    solver=nothing)
-    N = promote_type(eltype(A), eltype(b))
-    # feasibility LP
-    lbounds, ubounds = -Inf, Inf
-    sense = '<'
-    obj = zeros(N, size(A, 2))
-    if isnothing(solver)
-        solver = default_lp_solver(N)
-    end
-    lp = linprog(obj, A, sense, b, lbounds, ubounds, solver)
-    if is_lp_optimal(lp.status)
-        return witness ? (true, lp.sol) : true
-    elseif is_lp_infeasible(lp.status)
-        return witness ? (false, N[]) : false
-    end
-    return error("LP returned status $(lp.status) unexpectedly")
 end
 
 # convenience function to invert the result of `isfeasible` while still including the witness result
