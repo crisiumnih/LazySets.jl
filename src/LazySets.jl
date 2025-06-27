@@ -119,6 +119,8 @@ include("Sets/DensePolynomialZonotope/DensePolynomialZonotopeModule.jl")
 include("Sets/Ellipsoid/EllipsoidModule.jl")
 @reexport using ..EllipsoidModule: Ellipsoid, shape_matrix
 
+include("Sets/Ellipsotopes/Ellipsotopes.jl")
+
 include("Sets/EmptySet/EmptySetModule.jl")
 @reexport using ..EmptySetModule: EmptySet, ∅
 using ..EmptySetModule: _cartesian_product_emptyset, _convex_hull_emptyset, _difference_emptyset,
