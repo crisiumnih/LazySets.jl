@@ -150,6 +150,9 @@ if test_suite_basic
     @testset "LazySets.Zonotope" begin
         include("Sets/Zonotope.jl")
     end
+    @testset "LazySets.ZonotopeMD" begin
+        include("Sets/ZonotopeMD.jl")
+    end
     @testset "LazySets.ZeroSet" begin
         include("Sets/ZeroSet.jl")
     end
@@ -277,7 +280,7 @@ if test_suite_basic
         include("ConcreteOperations/interior.jl")
     end
     @testset "LazySets.intersection" begin
-        include("ConcreteOperations/isstrictsubset.jl")
+        include("ConcreteOperations/intersection.jl")
     end
     @testset "LazySets.isdisjoint" begin
         include("ConcreteOperations/isdisjoint.jl")

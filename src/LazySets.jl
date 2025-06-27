@@ -221,6 +221,9 @@ include("Sets/Zonotope/ZonotopeModule.jl")
                                   split!
 using ..ZonotopeModule: _split
 
+include("Sets/ZonotopeMD/ZonotopeMDModule.jl")
+@reexport using ..ZonotopeMDModule: ZonotopeMD
+
 include("LazyOperations/UnionSet.jl")  # must come before IntervalModule
 
 include("Sets/Interval/IntervalModule.jl")
