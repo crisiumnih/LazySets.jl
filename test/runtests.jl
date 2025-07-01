@@ -162,6 +162,9 @@ if test_suite_basic
     @testset "LazySets.Ellipsoid" begin
         include("Sets/Ellipsoid.jl")
     end
+    @testset "LazySets.Ellipsotope" begin
+        include("Sets/Ellipsotope.jl")
+    end
     @testset "LazySets.Hyperplane" begin
         include("Sets/Hyperplane.jl")
     end

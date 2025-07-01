@@ -11,7 +11,7 @@ struct Ellipsotope{N<:AbstractFloat,
     A::MN  # Constraint matrix A
     b::VN  # Constraint vector b
 
-    function Ellipsotope(c::VN, G::MN, pn::PN, index_set::IV) where {
+    function Ellipsotope(c::VN, G::MN, pn::PN, index_set::IV, A::MN, b::VN) where {
                         N<:AbstractFloat,
                         VN<:AbstractVector{N},
                         MN<:AbstractMatrix{N},
@@ -22,8 +22,8 @@ struct Ellipsotope{N<:AbstractFloat,
 
         @assert length(c) == n "Center vector dimension ($(length(c))) " *
                                 "does not match generator matrix row dimension ($n)."
-        @assert p >= 1 "p must be >= 1, got p = $p"
-        return new{N, VN, MN, PN, IV}{c, G, pn, index_set, A, b}
+        @assert pn >= 1 "p must be >= 1, got p = $pn"
+        return new{N, VN, MN, PN, IV}(c, G, pn, index_set, A, b)
     end
 end
 
@@ -32,7 +32,7 @@ function Ellipsotope(c::AbstractVector{N}, G::AbstractMatrix{N}, p::Real, index_
 
     A = Matrix{N}(undef, 0, size(G, 2))
     b = Vector{N}(undef, 0)
-    return Ellipsotope(c, G, p, I, A, b)
+    return Ellipsotope(c, G, p, index_set, A, b)
 
 end
 

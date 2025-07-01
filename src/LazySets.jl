@@ -119,8 +119,6 @@ include("Sets/DensePolynomialZonotope/DensePolynomialZonotopeModule.jl")
 include("Sets/Ellipsoid/EllipsoidModule.jl")
 @reexport using ..EllipsoidModule: Ellipsoid, shape_matrix
 
-include("Sets/Ellipsotopes/Ellipsotopes.jl")
-
 include("Sets/EmptySet/EmptySetModule.jl")
 @reexport using ..EmptySetModule: EmptySet, ∅
 using ..EmptySetModule: _cartesian_product_emptyset, _convex_hull_emptyset, _difference_emptyset,
@@ -223,8 +221,8 @@ include("Sets/Zonotope/ZonotopeModule.jl")
                                   split!
 using ..ZonotopeModule: _split
 
-include("Sets/ZonotopeMD/ZonotopeMDModule.jl")
-@reexport using ..ZonotopeMDModule: ZonotopeMD
+include("Sets/Ellipsotope/EllipsotopeModule.jl")
+@reexport using ..EllipsotopeModule: Ellipsotope
 
 include("LazyOperations/UnionSet.jl")  # must come before IntervalModule
 
